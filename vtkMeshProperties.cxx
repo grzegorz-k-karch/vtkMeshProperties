@@ -52,6 +52,53 @@ int vtkMeshProperties::FillInputPortInformation(int port, vtkInformation* info)
 }
 
 //----------------------------------------------------------------------------
+void testClosedSurfaces(const vtkIdType *cellArrayData,
+			vtkDataArray *regionId,
+			const int numRegions, const int numCells,
+			std::vector<bool> &closedSurfaces)
+{
+  std::vector<std::vector<vtkIdType>> regions(numRegions);
+  for (auto &reg : regions) {
+    reg.clear();
+  }
+
+  int arrayIdx = 0;
+  for (int i = 0; i < numCells; ++i) {
+    int pid[3] = {cellArrayData[arrayIdx+1],
+		  cellArrayData[arrayIdx+2],
+		  cellArrayData[arrayIdx+3]};
+    int id = regionId->GetComponent(i, 0);
+
+    regions[id].push_back(pid[0]);
+    regions[id].push_back(pid[1]);
+    regions[id].push_back(pid[2]);
+
+    arrayIdx += 4;
+  }
+
+  int regIdx = 0;
+  for (const auto &region : regions) {
+    std::map<std::pair<vtkIdType,vtkIdType>,int> edges;
+    edges.clear();
+      
+    for (int t = 0; t < region.size()/3; ++t) {
+      for (int j = 0; j < 3; ++j) {
+	int e0 = region[t*3+j+0];
+	int e1 = region[t*3+(j+1)%3];
+	edges[std::pair<vtkIdType,vtkIdType>(std::min(e0,e1),std::max(e0,e1))] += 1;
+      }
+    }
+
+    for (const auto &e : edges) {
+      if (e.second != 2) {
+	closedSurfaces[regIdx] = false;
+      }
+    }
+    ++regIdx;
+  }
+}
+
+//----------------------------------------------------------------------------
 int vtkMeshProperties::RequestData(vtkInformation *vtkNotUsed(request),
 			     vtkInformationVector **inputVector,
 			     vtkInformationVector *outputVector)
@@ -91,51 +138,7 @@ int vtkMeshProperties::RequestData(vtkInformation *vtkNotUsed(request),
   }
 
   std::vector<bool> closedSurfaces(numRegions, true);
-
-  //--------------------------------------------------------------------------
-  // test if meshes are closed
-  {
-    std::vector<std::vector<vtkIdType>> regions(numRegions);
-    for (auto &reg : regions) {
-      reg.clear();
-    }
-
-    arrayIdx = 0;
-    for (int i = 0; i < numCells; ++i) {
-      int pid[3] = {cellArrayData[arrayIdx+1],
-		    cellArrayData[arrayIdx+2],
-		    cellArrayData[arrayIdx+3]};
-      int id = regionId->GetComponent(i, 0);
-
-      regions[id].push_back(pid[0]);
-      regions[id].push_back(pid[1]);
-      regions[id].push_back(pid[2]);
-
-      arrayIdx += 4;
-    }
-
-    int regIdx = 0;
-    for (const auto &region : regions) {
-      std::map<std::pair<vtkIdType,vtkIdType>,int> edges;
-      edges.clear();
-      
-      for (int t = 0; t < region.size()/3; ++t) {
-	for (int j = 0; j < 3; ++j) {
-	  int e0 = region[t*3+j+0];
-	  int e1 = region[t*3+(j+1)%3];
-	  edges[std::pair<vtkIdType,vtkIdType>(std::min(e0,e1),std::max(e0,e1))] += 1;
-	}
-      }
-
-      for (const auto &e : edges) {
-	if (e.second != 2) {
-	  closedSurfaces[regIdx] = false;
-	}
-      }
-      ++regIdx;
-    }
-  }
-  //--------------------------------------------------------------------------
+  testClosedSurfaces(cellArrayData, regionId, numRegions, numCells, closedSurfaces);
   
   vtkSmartPointer<vtkDoubleArray> areasArray = 
     vtkSmartPointer<vtkDoubleArray>::New();
