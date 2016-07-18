@@ -76,6 +76,7 @@ void testClosedSurfaces(const vtkIdType *cellArrayData,
     arrayIdx += 4;
   }
 
+  std::vector<int> numOpenEdges(numRegions,0);
   int regIdx = 0;
   for (const auto &region : regions) {
     std::map<std::pair<vtkIdType,vtkIdType>,int> edges;
@@ -92,10 +93,16 @@ void testClosedSurfaces(const vtkIdType *cellArrayData,
     for (const auto &e : edges) {
       if (e.second != 2) {
 	closedSurfaces[regIdx] = false;
+	numOpenEdges[regIdx] += 1;
+
+	// std::cout << regIdx << ": " << e.first.first << "-" << e.first.second << std::endl;
       }
     }
     ++regIdx;
   }
+  // for (int i = 0; i < numRegions; ++i) {
+  //   std::cout << "numOpenEdges[" << i << "] = " << numOpenEdges[i] << std::endl;
+  // }
 }
 
 //----------------------------------------------------------------------------
@@ -171,11 +178,16 @@ int vtkMeshProperties::RequestData(vtkInformation *vtkNotUsed(request),
     if (closedSurfaces[id] == true) {
       double cr[3];
       cross(p[1], p[2], cr);
-      volumes[id] += dot(p[0], cr)/6.0;
+      volumes[id] += dot(p[0], cr);
     }
 
     arrayIdx += 4;
   }
+
+  for (std::vector<double>::iterator it = volumes.begin(); it != volumes.end(); ++it) {
+    *it /= 6.0;
+  }
+  
   for (int i = 0; i < numCells; ++i) {
     int id = regionId->GetComponent(i, 0);
     areasArray->SetValue(i, areas[id]);
